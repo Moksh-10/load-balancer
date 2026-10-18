@@ -113,7 +113,7 @@ func lb(w http.ResponseWriter, r *http.Request) {
 
 	peer := serverPool.GetNextPeer()
 	if peer != nil {
-		peer.ReverseProxy.ServeHttp(w, r)
+		peer.ReverseProxy.ServeHTTP(w, r)
 		return
 	}
 	http.Error(w, "service not available", http.StatusServiceUnavailable)
