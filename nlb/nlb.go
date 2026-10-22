@@ -1,8 +1,11 @@
 package nlb
 
 import (
+	"log"
+	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 type Backend struct {
@@ -52,3 +55,24 @@ func (s *ServerPool) GetNextPeer() *Backend {
 	}
 	return nil
 }
+
+func (s *ServerPool) HealthCheck() {
+	for  _, b := range s.backends {
+		conn, err := net.DialTimeout("tcp", b.Address, 2*time.Second) 
+		alive := err == nil 
+		if conn != nil {
+			conn.Close()
+		}
+
+		b.setAlive(alive)
+
+		status := "up" 
+		if !alive {
+			status = "down"
+		}
+
+		log.Printf("%s [%s]", b.Address, status)
+	}
+}
+
+func 
