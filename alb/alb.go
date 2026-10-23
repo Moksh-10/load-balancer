@@ -1,4 +1,4 @@
-package alb
+package main
 
 import (
 	"context"
@@ -21,13 +21,13 @@ const (
 )
 
 type Backend struct {
-	URL *url.URL
-	Alive bool
-	mux sync.RWMutex
+	URL          *url.URL
+	Alive        bool
+	mux          sync.RWMutex
 	ReverseProxy *httputil.ReverseProxy
 }
 
-func (b *Backend) setAlive (alive bool) {
+func (b *Backend) setAlive(alive bool) {
 	b.mux.Lock()
 	b.Alive = alive
 	b.mux.Unlock()
@@ -42,10 +42,10 @@ func (b *Backend) isAlive() (alive bool) {
 
 type ServerPool struct {
 	backends []*Backend
-	current uint64
+	current  uint64
 }
 
-func (s *ServerPool) AddBackend (backend *Backend) {
+func (s *ServerPool) AddBackend(backend *Backend) {
 	s.backends = append(s.backends, backend)
 }
 
@@ -53,7 +53,7 @@ func (s *ServerPool) NextIndex() int {
 	return int(atomic.AddUint64(&s.current, uint64(1)) % uint64(len(s.backends)))
 }
 
-func (s *ServerPool) MarkBackendStatus (backendUrl *url.URL, alive bool) {
+func (s *ServerPool) MarkBackendStatus(backendUrl *url.URL, alive bool) {
 	for _, b := range s.backends {
 		if b.URL.String() == backendUrl.String() {
 			b.setAlive(alive)
@@ -65,10 +65,10 @@ func (s *ServerPool) MarkBackendStatus (backendUrl *url.URL, alive bool) {
 func (s *ServerPool) GetNextPeer() *Backend {
 	next := s.NextIndex()
 	l := len(s.backends) + next
-	for i := next; i<l; i++ {
-		idx := i%len(s.backends)
+	for i := next; i < l; i++ {
+		idx := i % len(s.backends)
 		if s.backends[idx].isAlive() {
-			if i != next{
+			if i != next {
 				atomic.StoreUint64(&s.current, uint64(idx))
 			}
 			return s.backends[idx]
@@ -132,9 +132,9 @@ func isBackendAlive(u *url.URL) bool {
 
 func healthCheck() {
 	t := time.NewTicker(time.Minute * 2)
-	for { 
+	for {
 		select {
-		case <- t.C:
+		case <-t.C:
 			log.Println("starting health check...")
 			serverPool.HealthCheck()
 			log.Println("health check done")
@@ -145,8 +145,8 @@ func healthCheck() {
 var serverPool ServerPool
 
 func main() {
-	var serverList string 
-	var port int 
+	var serverList string
+	var port int
 	flag.StringVar(&serverList, "backend", "", "load balanced backends")
 	flag.IntVar(&port, "port", 3030, "port to serve")
 	flag.Parse()
@@ -168,8 +168,8 @@ func main() {
 			retries := GetRetryFromContext(request)
 			if retries < 3 {
 				select {
-				case <-time.After(10 * time.Millisecond) :
-					ctx := context.WithValue(request.Context(), Retry, retries + 1)
+				case <-time.After(10 * time.Millisecond):
+					ctx := context.WithValue(request.Context(), Retry, retries+1)
 					proxy.ServeHTTP(writer, request.WithContext(ctx))
 				}
 				return
@@ -184,15 +184,15 @@ func main() {
 		}
 
 		serverPool.AddBackend(&Backend{
-			URL: serverUrl,
-			Alive: true,
+			URL:          serverUrl,
+			Alive:        true,
 			ReverseProxy: proxy,
 		})
 		log.Printf("conf server: %s\n", serverUrl)
 	}
 
 	server := http.Server{
-		Addr: fmt.Sprintf(":%d", port),
+		Addr:    fmt.Sprintf(":%d", port),
 		Handler: http.HandlerFunc(lb),
 	}
 
