@@ -79,19 +79,50 @@ func (s *ServerPool) HealthCheck() {
 	}
 }
 
+func (s *ServerPool) hasAliveBackend() bool {
+	for _, b := range s.backends {
+		if b.isAlive() {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *ServerPool) waitForHealthyBackends() {
+	const maxAttempts = 30
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		s.HealthCheck()
+		if s.hasAliveBackend() {
+			log.Println("backends ready")
+			return
+		}
+		log.Printf("waiting for backends (%d/%d)...", attempt, maxAttempts)
+		time.Sleep(time.Second)
+	}
+	log.Println("warning: no healthy backends yet; accepting traffic anyway")
+}
+
 func (s *ServerPool) handle(client net.Conn) {
 	defer client.Close()
 
-	peer := s.GetNextPeer()
-	if peer == nil {
-		log.Println("none avialable")
-		return
-	}
-
-	upstream, err := net.DialTimeout("tcp", peer.Address, 2*time.Second)
-	if err != nil {
+	n := len(s.backends)
+	var upstream net.Conn
+	var peer *Backend
+	for i := 0; i < n; i++ {
+		peer = s.GetNextPeer()
+		if peer == nil {
+			break
+		}
+		conn, err := net.DialTimeout("tcp", peer.Address, 2*time.Second)
+		if err == nil {
+			upstream = conn
+			break
+		}
 		log.Printf("backend %s err: %v", peer.Address, err)
 		peer.SetAlive(false)
+	}
+	if upstream == nil {
+		log.Println("none available")
 		return
 	}
 	defer upstream.Close()
@@ -144,7 +175,7 @@ func main() {
 		log.Fatal("no backends available")
 	}
 
-	serverPool.HealthCheck()
+	serverPool.waitForHealthyBackends()
 
 	go func() {
 		ticker := time.NewTicker(time.Minute * 2)
